@@ -97,9 +97,43 @@ function init() {
     blurMax: 0.01,
     vertDispMin: 0.0,
     vertDispMax: 0.15,
+    bloomMin: 0.0,
+    bloomMax: 1.5,
+    smoothing: 0,
     textColor: '#ffffff',
     bgColor: '#000000'
   };
+
+  // Adaptive smoothing: low aggression = more smoothing, high aggression = sharp
+  function smoothArray(arr, maxWindowSize) {
+    if (maxWindowSize <= 0) return arr.slice();
+    const result = new Array(arr.length);
+    
+    for (let i = 0; i < arr.length; i++) {
+      const value = arr[i];
+      // Remap: 0-0.5 becomes 0-1, anything 0.5+ becomes 1 (sharp)
+      const remapped = Math.min(1, value * 2);
+      // Adaptive window with exponential curve: low values get MUCH more smoothing
+      // value 0 -> maxWindowSize * 1.5, value 0.5+ -> minimal smoothing
+      const smoothFactor = Math.pow(1 - remapped, 2);
+      const adaptiveWindow = Math.max(1, Math.round(maxWindowSize * 1.5 * smoothFactor + 1));
+      const halfWindow = Math.floor(adaptiveWindow / 2);
+      
+      let sum = 0;
+      let count = 0;
+      for (let j = -halfWindow; j <= halfWindow; j++) {
+        const idx = i + j;
+        if (idx >= 0 && idx < arr.length) {
+          // Gaussian-ish weighting: center samples matter more
+          const weight = 1.0 - Math.abs(j) / (halfWindow + 1) * 0.5;
+          sum += arr[idx] * weight;
+          count += weight;
+        }
+      }
+      result[i] = sum / count;
+    }
+    return result;
+  }
 
   // Setup control listeners
   const chromaMin = document.getElementById('chromaMin');
@@ -117,6 +151,11 @@ function init() {
   const vertDispMinSlider = document.getElementById('vertDispMin');
   const vertDispMaxSlider = document.getElementById('vertDispMax');
   const vertDispValue = document.getElementById('vertDispValue');
+  const bloomMinSlider = document.getElementById('bloomMin');
+  const bloomMaxSlider = document.getElementById('bloomMax');
+  const bloomValue = document.getElementById('bloomValue');
+  const smoothingSlider = document.getElementById('smoothing');
+  const smoothingValue = document.getElementById('smoothingValue');
   const trackSelect = document.getElementById('trackSelect');
   const downloadBtn = document.getElementById('downloadBtn');
   const textColorInput = document.getElementById('textColor');
@@ -246,6 +285,21 @@ function init() {
     vertDispValue.textContent = `${params.vertDispMin.toFixed(2)} → ${params.vertDispMax.toFixed(2)}`;
   });
 
+  bloomMinSlider.addEventListener('input', () => {
+    params.bloomMin = parseFloat(bloomMinSlider.value);
+    bloomValue.textContent = `${params.bloomMin.toFixed(2)} → ${params.bloomMax.toFixed(2)}`;
+  });
+  bloomMaxSlider.addEventListener('input', () => {
+    params.bloomMax = parseFloat(bloomMaxSlider.value);
+    bloomValue.textContent = `${params.bloomMin.toFixed(2)} → ${params.bloomMax.toFixed(2)}`;
+  });
+
+  smoothingSlider.addEventListener('input', () => {
+    params.smoothing = parseInt(smoothingSlider.value);
+    smoothingValue.textContent = params.smoothing === 0 ? 'Off' : `${params.smoothing} frames`;
+    updateAggressionTexture();
+  });
+
   resetBtn.addEventListener('click', () => {
     params.waveFreqMin = 5;
     params.waveFreqMax = 25;
@@ -264,10 +318,15 @@ function init() {
     blurMaxSlider.value = params.blurMax = 0.01;
     vertDispMinSlider.value = params.vertDispMin = 0.0;
     vertDispMaxSlider.value = params.vertDispMax = 0.15;
+    bloomMinSlider.value = params.bloomMin = 0.0;
+    bloomMaxSlider.value = params.bloomMax = 1.5;
+    smoothingSlider.value = params.smoothing = 0;
     chromaValue.textContent = '0.000 → 0.003';
     trimValue.textContent = '0% → 100%';
     blurValue.textContent = '0.000 → 0.010';
     vertDispValue.textContent = '0.00 → 0.15';
+    bloomValue.textContent = '0.00 → 1.50';
+    smoothingValue.textContent = 'Off';
     // Reset colors
     textColorInput.value = params.textColor = '#ffffff';
     bgColorInput.value = params.bgColor = '#000000';
@@ -355,6 +414,8 @@ function init() {
     uniform float u_blurMax;
     uniform float u_vertDispMin;
     uniform float u_vertDispMax;
+    uniform float u_bloomMin;
+    uniform float u_bloomMax;
 
     varying vec2 v_texCoord;
 
@@ -490,22 +551,57 @@ function init() {
 
       vec3 color = vec3(r, g, b);
 
+      // === GLOW/LUMINOSITY (ethereal effect - stronger at low aggression) ===
+      float glowIntensity = invAggression * invAggression * u_bloomMax + localAggression * u_bloomMin;
+      
+      // Only apply glow to text areas
+      float textPresence = smoothstep(0.0, 0.2, a);
+      float effectiveGlow = glowIntensity * textPresence;
+      
+      // Calculate luminance of current pixel
+      float lum = dot(color, vec3(0.299, 0.587, 0.114));
+      
+      // Soft glow: boost brightness based on existing luminance (bright areas glow more)
+      float glowBoost = lum * effectiveGlow * 0.4;
+      color += glowBoost;
+      
+      // Soft highlight compression - let bright areas blow out gently
+      vec3 softClip = color / (1.0 + color * effectiveGlow * 0.25);
+      color = mix(color, softClip + effectiveGlow * 0.1, effectiveGlow);
+
       // === GRAIN ===
       float grainIntensity = localAggression * u_grainMax + (1.0 - localAggression) * u_grainMin;
       float grain = snoise(uv * 500.0 + u_time * 10.0) * grainIntensity;
       color += grain;
 
-      // === COLOR GRADING ===
-      float brightness = localAggression * 0.2 + (1.0 - localAggression) * 0.1;
+      // === COLOR GRADING (only on text, not background) ===
+      float textMask = smoothstep(0.0, 0.3, a);
+      
+      // Brightness boost only on text
+      float brightness = (localAggression * 0.1 + (1.0 - localAggression) * 0.15) * textMask;
       color += brightness;
 
-      // Contrast
-      float contrast = localAggression * 0.3 + (1.0 - localAggression) * -0.1;
-      color = (color - 0.5) * (1.0 + contrast) + 0.5;
+      // Contrast - aggressive = harsh contrast, ethereal = softer (on text only)
+      float contrast = (localAggression * 0.3 + (1.0 - localAggression) * 0.0) * textMask;
+      vec3 contrasted = (color - 0.5) * (1.0 + contrast) + 0.5;
+      color = mix(color, contrasted, textMask);
 
-      // Saturation
+      // === COLOR TEMPERATURE (ethereal = warm golden, aggressive = cool harsh) ===
+      // Warm shift for ethereal: boost red/green, reduce blue
+      float warmth = invAggression * 0.12 * textMask;
+      color.r += warmth * 0.6;   // Peachy/golden red boost
+      color.g += warmth * 0.3;   // Slight green for golden tone
+      color.b -= warmth * 0.2;   // Reduce blue for warmth
+      
+      // Cool shift for aggressive: slight blue push, reduce warmth
+      float coolness = localAggression * 0.08 * textMask;
+      color.b += coolness * 0.15;
+      color.r -= coolness * 0.08;
+
+      // === SATURATION (INVERTED: aggressive = desaturated/gritty, ethereal = vibrant) ===
       float gray = dot(color, vec3(0.299, 0.587, 0.114));
-      float saturation = localAggression * 0.5 + (1.0 - localAggression) * -0.3;
+      // Flip the mapping: low aggression = saturated, high aggression = desaturated
+      float saturation = (1.0 - localAggression) * 0.4 + localAggression * -0.4;
       color = mix(vec3(gray), color, 1.0 + saturation);
 
       gl_FragColor = vec4(color, a);
@@ -645,12 +741,18 @@ function init() {
   const u_blurMax = gl.getUniformLocation(program, 'u_blurMax');
   const u_vertDispMin = gl.getUniformLocation(program, 'u_vertDispMin');
   const u_vertDispMax = gl.getUniformLocation(program, 'u_vertDispMax');
+  const u_bloomMin = gl.getUniformLocation(program, 'u_bloomMin');
+  const u_bloomMax = gl.getUniformLocation(program, 'u_bloomMax');
 
   let texture = null;
   let aggressionTexture = null;
 
   function updateAggressionTexture() {
-    const data = params.normalizeAggression ? normalizedAggressionData : aggressionData;
+    let data = params.normalizeAggression ? normalizedAggressionData : aggressionData;
+    // Apply smoothing if enabled
+    if (params.smoothing > 0) {
+      data = smoothArray(data, params.smoothing);
+    }
     aggressionTexture = createAggressionTexture(data);
   }
 
@@ -710,6 +812,8 @@ function init() {
     gl.uniform1f(u_blurMax, params.blurMax);
     gl.uniform1f(u_vertDispMin, params.vertDispMin);
     gl.uniform1f(u_vertDispMax, params.vertDispMax);
+    gl.uniform1f(u_bloomMin, params.bloomMin);
+    gl.uniform1f(u_bloomMax, params.bloomMax);
 
     // Bind text texture to unit 0
     gl.activeTexture(gl.TEXTURE0);
@@ -746,8 +850,11 @@ function init() {
     timelineCtx.fillStyle = 'rgba(255, 100, 200, 0.15)';
     timelineCtx.fillRect(trimStartX, 0, trimEndX - trimStartX, tlHeight);
 
-    // Aggression curve (use current setting)
-    const displayData = params.normalizeAggression ? normalizedAggressionData : aggressionData;
+    // Aggression curve (use current setting, with smoothing applied)
+    let displayData = params.normalizeAggression ? normalizedAggressionData : aggressionData;
+    if (params.smoothing > 0) {
+      displayData = smoothArray(displayData, params.smoothing);
+    }
     timelineCtx.strokeStyle = '#ff64c8';
     timelineCtx.lineWidth = 2;
     timelineCtx.beginPath();
