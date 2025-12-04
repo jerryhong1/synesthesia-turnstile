@@ -2,7 +2,7 @@ let trackData = null;
 let animationId = null;
 let mouseX = 0;
 let currentDisplayText = 'NEVER ENOUGH';
-let currentFont = 'Pitch';
+let currentFont = 'sans-serif';
 
 const canvas = document.getElementById('visualizer');
 const loading = document.getElementById('loading');
@@ -99,7 +99,7 @@ function init() {
     vertDispMax: 0.15,
     bloomMin: 0.0,
     bloomMax: 1.5,
-    smoothing: 0,
+    smoothing: 20,
     textColor: '#ffffff',
     bgColor: '#000000'
   };
@@ -334,7 +334,7 @@ function init() {
     trackSelect.value = trackData.tracks[0].title;
     selectTrack(trackData.tracks[0].title);
     textInput.value = currentDisplayText = trackData.tracks[0].title;
-    fontSelect.value = currentFont = 'Pitch';
+    fontSelect.value = currentFont = 'sans-serif';
     recreateTextTexture();
     updateAggressionTexture();
   });
@@ -354,18 +354,8 @@ function init() {
   toggleChromeBtn.addEventListener('click', toggleChrome);
 
   // Keyboard shortcut for toggle
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'h' || e.key === 'H') {
-      // Don't trigger if typing in text input
-      if (document.activeElement !== textInput) {
-        toggleChrome();
-      }
-    }
-  });
-
-  // Download PNG
-  downloadBtn.addEventListener('click', () => {
-    // WebGL canvas needs preserveDrawingBuffer or we render one frame first
+  // Download PNG function
+  function downloadPNG() {
     // Render a frame to make sure canvas has content
     const time = Date.now() / 1000;
     gl.uniform1f(u_time, time);
@@ -377,7 +367,22 @@ function init() {
     link.download = `${currentDisplayText.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.png`;
     link.href = dataURL;
     link.click();
+  }
+
+  document.addEventListener('keydown', (e) => {
+    // Don't trigger if typing in text input
+    if (document.activeElement === textInput) return;
+    
+    if (e.key === 'h' || e.key === 'H') {
+      toggleChrome();
+    }
+    if (e.key === 'd' || e.key === 'D') {
+      downloadPNG();
+    }
   });
+
+  // Download PNG button
+  downloadBtn.addEventListener('click', downloadPNG);
 
   // Vertex shader - simple quad
   const vertexShaderSource = `
@@ -504,15 +509,16 @@ function init() {
       float alphaAccum = 0.0;
       float totalWeight = 0.0;
 
-      // 2D Gaussian blur + vertical displacement
-      const int BLUR_SAMPLES = 2;  // -2 to 2 = 5x5 = 25 samples
+      // Higher quality 2D Gaussian blur + vertical displacement
+      const int BLUR_SAMPLES = 4;  // -4 to 4 = 9x9 = 81 samples for smoother blur
       
       for (int i = -BLUR_SAMPLES; i <= BLUR_SAMPLES; i++) {
         for (int j = -BLUR_SAMPLES; j <= BLUR_SAMPLES; j++) {
-          // 2D Gaussian weight
+          // 2D Gaussian weight with tighter falloff
           float nx = float(i) / float(BLUR_SAMPLES);
           float ny = float(j) / float(BLUR_SAMPLES);
-          float weight = exp(-0.5 * (nx * nx + ny * ny));
+          float dist = nx * nx + ny * ny;
+          float weight = exp(-2.0 * dist);  // Tighter gaussian for better quality
           
           // Blur offset in both X and Y
           vec2 blurOffset = vec2(
@@ -544,12 +550,39 @@ function init() {
       colorB /= totalWeight;
       float a = alphaAccum / totalWeight;
 
+      // === EDGE DISSOLUTION (ethereal sections - text evaporates) ===
+      // Multi-octave fractal noise for organic erosion
+      float erosionNoise = snoise(uv * 8.0 + u_time * 0.1) * 0.5
+                         + snoise(uv * 16.0 - u_time * 0.15) * 0.3
+                         + snoise(uv * 32.0 + u_time * 0.05) * 0.2;
+      // Erode edges more in ethereal sections
+      float erosionAmount = invAggression * invAggression * 0.6;
+      // Only erode near edges (where alpha is partial)
+      float edgeMask = smoothstep(0.1, 0.5, a) * smoothstep(0.9, 0.6, a);
+      float erosion = erosionNoise * erosionAmount * (1.0 + edgeMask * 2.0);
+      a = clamp(a - erosion * 0.5, 0.0, 1.0);
+
       // Combine chromatic channels
       float r = colorR.r;
       float g = colorG.g;
       float b = colorB.b;
 
       vec3 color = vec3(r, g, b);
+
+      // === LIGHT LEAKS (organic warm overlays in ethereal sections) ===
+      // Sweeping light leak shapes based on noise
+      float leakNoise1 = snoise(vec2(uv.x * 2.0 + u_time * 0.08, uv.y * 0.5)) * 0.5 + 0.5;
+      float leakNoise2 = snoise(vec2(uv.x * 1.5 - u_time * 0.05, uv.y * 1.0 + u_time * 0.03)) * 0.5 + 0.5;
+      float leakShape = smoothstep(0.3, 0.7, leakNoise1 * leakNoise2);
+      
+      // Warm light leak colors (peachy/golden/amber)
+      vec3 leakColor1 = vec3(1.0, 0.85, 0.6);   // Warm amber
+      vec3 leakColor2 = vec3(1.0, 0.7, 0.5);    // Peachy
+      vec3 leakColor = mix(leakColor1, leakColor2, leakNoise2);
+      
+      // Only apply in ethereal sections, and only where there's text
+      float leakIntensity = invAggression * invAggression * 0.15 * leakShape * smoothstep(0.0, 0.3, a);
+      color += leakColor * leakIntensity;
 
       // === GLOW/LUMINOSITY (ethereal effect - stronger at low aggression) ===
       float glowIntensity = invAggression * invAggression * u_bloomMax + localAggression * u_bloomMin;
