@@ -1,0 +1,61 @@
+{
+  "total_tracks": 14,
+  "tracks": [
+    {
+      "file": "01 NEVER ENOUGH.m4a",
+      "analysis_file": "01 NEVER ENOUGH_analysis.json"
+    },
+    {
+      "file": "02 SOLE.m4a",
+      "analysis_file": "02 SOLE_analysis.json"
+    },
+    {
+      "file": "03 I CARE.m4a",
+      "analysis_file": "03 I CARE_analysis.json"
+    },
+    {
+      "file": "04 DREAMING.m4a",
+      "analysis_file": "04 DREAMING_analysis.json"
+    },
+    {
+      "file": "05 LIGHT DESIGN.m4a",
+      "analysis_file": "05 LIGHT DESIGN_analysis.json"
+    },
+    {
+      "file": "06 DULL.m4a",
+      "analysis_file": "06 DULL_analysis.json"
+    },
+    {
+      "file": "07 SUNSHOWER.m4a",
+      "analysis_file": "07 SUNSHOWER_analysis.json"
+    },
+    {
+      "file": "08 LOOK OUT FOR ME.m4a",
+      "analysis_file": "08 LOOK OUT FOR ME_analysis.json"
+    },
+    {
+      "file": "09 CEILING.m4a",
+      "analysis_file": "09 CEILING_analysis.json"
+    },
+    {
+      "file": "10 SEEIN' STARS.m4a",
+      "analysis_file": "10 SEEIN' STARS_analysis.json"
+    },
+    {
+      "file": "11 BIRDS.m4a",
+      "analysis_file": "11 BIRDS_analysis.json"
+    },
+    {
+      "file": "12 SLOWDIVE.m4a",
+      "analysis_file": "12 SLOWDIVE_analysis.json"
+    },
+    {
+      "file": "13 TIME IS HAPPENING.m4a",
+      "analysis_file": "13 TIME IS HAPPENING_analysis.json"
+    },
+    {
+      "file": "14 MAGIC MAN.m4a",
+      "analysis_file": "14 MAGIC MAN_analysis.json"
+    }
+  ]
+}

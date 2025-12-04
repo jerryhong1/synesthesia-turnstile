@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Turnstile - Canvas Pixel Manipulation (Audio)</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #000;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', monospace;
+    }
+
+    #loading {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #fff;
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    #visualizer {
+      display: none;
+      cursor: pointer;
+    }
+
+    #info {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      color: #fff;
+      font-size: 14px;
+      font-family: monospace;
+      pointer-events: none;
+      z-index: 10;
+      text-shadow: 0 0 4px rgba(0,0,0,0.8);
+    }
+
+    #info div {
+      margin-bottom: 4px;
+    }
+
+    #audioControls {
+      position: fixed;
+      bottom: 100px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(30,30,30,0.9);
+      padding: 15px 25px;
+      border-radius: 8px;
+      display: none;
+      align-items: center;
+      gap: 15px;
+      z-index: 20;
+    }
+
+    #playPauseBtn {
+      background: #ff64c8;
+      border: none;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      color: #000;
+      font-size: 20px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    #playPauseBtn:hover {
+      background: #ff7ad4;
+    }
+  </style>
+</head>
+<body>
+  <div id="loading">Loading NEVER ENOUGH...</div>
+  <canvas id="visualizer"></canvas>
+  <audio id="audioPlayer" style="display: none;">
+    <source src="../music/01 NEVER ENOUGH.m4a" type="audio/mp4">
+  </audio>
+
+  <div id="audioControls">
+    <button id="playPauseBtn">▶</button>
+    <span style="color: #fff; font-family: monospace; font-size: 14px;">Click to play/pause</span>
+  </div>
+
+  <div id="info"></div>
+
+  <div id="controls" style="position: fixed; top: 20px; right: 20px; background: rgba(30,30,30,0.9); padding: 20px; border-radius: 8px; color: #fff; font-family: monospace; font-size: 12px; max-width: 300px; max-height: 90vh; overflow-y: auto;">
+    <h3 style="margin: 0 0 15px 0; font-size: 14px; color: #ff64c8;">CONTROLS</h3>
+
+    <div style="margin-bottom: 15px;">
+      <label style="display: block; margin-bottom: 5px;">Chromatic Offset</label>
+      <input type="range" id="chromaMin" min="0" max="20" value="2" step="0.5" style="width: 100%;">
+      <input type="range" id="chromaMax" min="0" max="40" value="8" step="0.5" style="width: 100%;">
+      <span id="chromaValue" style="opacity: 0.6; font-size: 10px;">2.0 → 8.0</span>
+    </div>
+
+    <div style="margin-bottom: 15px;">
+      <label style="display: block; margin-bottom: 5px;">Wave Frequency</label>
+      <input type="range" id="waveFreqMin" min="0" max="0.05" value="0.01" step="0.001" style="width: 100%;">
+      <input type="range" id="waveFreqMax" min="0" max="0.1" value="0.03" step="0.001" style="width: 100%;">
+      <span id="waveFreqValue" style="opacity: 0.6; font-size: 10px;">0.010 → 0.030</span>
+    </div>
+
+    <div style="margin-bottom: 15px;">
+      <label style="display: block; margin-bottom: 5px;">Wave Amplitude</label>
+      <input type="range" id="waveAmpMin" min="0" max="20" value="3" step="0.5" style="width: 100%;">
+      <input type="range" id="waveAmpMax" min="0" max="50" value="15" step="0.5" style="width: 100%;">
+      <span id="waveAmpValue" style="opacity: 0.6; font-size: 10px;">3.0 → 15.0</span>
+    </div>
+
+    <div style="margin-bottom: 15px;">
+      <label style="display: block; margin-bottom: 5px;">Motion Blur</label>
+      <input type="range" id="blurAmount" min="0" max="10" value="3" step="0.5" style="width: 100%;">
+      <span id="blurValue" style="opacity: 0.6; font-size: 10px;">3.0</span>
+    </div>
+
+    <div style="margin-bottom: 15px;">
+      <label style="display: block; margin-bottom: 5px;">Grain Intensity</label>
+      <input type="range" id="grainMin" min="0" max="0.2" value="0.03" step="0.01" style="width: 100%;">
+      <input type="range" id="grainMax" min="0" max="0.5" value="0.15" step="0.01" style="width: 100%;">
+      <span id="grainValue" style="opacity: 0.6; font-size: 10px;">0.03 → 0.15</span>
+    </div>
+
+    <div style="margin-bottom: 15px;">
+      <label style="display: flex; align-items: center; cursor: pointer;">
+        <input type="checkbox" id="normalizeAggression" checked style="margin-right: 8px;">
+        Normalize Aggression
+      </label>
+    </div>
+
+    <button id="resetBtn" style="width: 100%; padding: 8px; background: #ff64c8; border: none; border-radius: 4px; color: #000; font-weight: bold; cursor: pointer; font-family: monospace;">RESET</button>
+  </div>
+
+  <script src="text_canvas_audio.js"></script>
+</body>
+</html>

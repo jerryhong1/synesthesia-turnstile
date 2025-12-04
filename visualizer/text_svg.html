@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Turnstile - SVG Filter Effects</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #0f0f0f;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', monospace;
+    }
+
+    #loading {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #fff;
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    #container {
+      display: none;
+      width: 100vw;
+      height: 100vh;
+      cursor: crosshair;
+    }
+
+    #svgCanvas {
+      width: 100%;
+      height: 100%;
+    }
+
+    #timeline {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      right: 20px;
+      height: 60px;
+      pointer-events: none;
+    }
+
+    #info {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      color: #fff;
+      font-size: 14px;
+      font-family: monospace;
+      pointer-events: none;
+      z-index: 10;
+      text-shadow: 0 0 4px rgba(0,0,0,0.8);
+    }
+
+    #info div {
+      margin-bottom: 4px;
+    }
+
+    .track-text {
+      font-family: Arial, sans-serif;
+      font-weight: bold;
+      font-size: 120px;
+      fill: #fff;
+      text-anchor: middle;
+      dominant-baseline: middle;
+    }
+  </style>
+</head>
+<body>
+  <div id="loading">Loading NEVER ENOUGH...</div>
+  <div id="container">
+    <canvas id="timeline"></canvas>
+    <svg id="svgCanvas" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <!-- Combined filter that we'll animate -->
+        <filter id="textFilter" x="-50%" y="-50%" width="200%" height="200%">
+
+          <!-- Turbulence for displacement -->
+          <feTurbulence id="turbulence" type="fractalNoise"
+                        baseFrequency="0.01" numOctaves="3" result="turbulence" />
+
+          <!-- Displacement map -->
+          <feDisplacementMap id="displacement" in="SourceGraphic" in2="turbulence"
+                             scale="0" xChannelSelector="R" yChannelSelector="G" result="displaced" />
+
+          <!-- Gaussian blur for motion blur / ethereal effect -->
+          <feGaussianBlur id="blur" in="displaced" stdDeviation="0" result="blurred" />
+
+          <!-- RGB separation using feOffset and feComposite -->
+          <feOffset id="offsetR" in="blurred" dx="-5" dy="0" result="offsetR" />
+          <feOffset id="offsetG" in="blurred" dx="0" dy="0" result="offsetG" />
+          <feOffset id="offsetB" in="blurred" dx="5" dy="0" result="offsetB" />
+
+          <!-- Extract color channels -->
+          <feColorMatrix id="redChannel" in="offsetR" type="matrix"
+                         values="1 0 0 0 0
+                                 0 0 0 0 0
+                                 0 0 0 0 0
+                                 0 0 0 1 0" result="red" />
+
+          <feColorMatrix id="greenChannel" in="offsetG" type="matrix"
+                         values="0 0 0 0 0
+                                 0 1 0 0 0
+                                 0 0 0 0 0
+                                 0 0 0 1 0" result="green" />
+
+          <feColorMatrix id="blueChannel" in="offsetB" type="matrix"
+                         values="0 0 0 0 0
+                                 0 0 0 0 0
+                                 0 0 1 0 0
+                                 0 0 0 1 0" result="blue" />
+
+          <!-- Combine RGB channels -->
+          <feBlend in="red" in2="green" mode="screen" result="rg" />
+          <feBlend in="rg" in2="blue" mode="screen" result="chromatic" />
+
+          <!-- Add grain/noise -->
+          <feTurbulence id="grain" type="fractalNoise" baseFrequency="0.9"
+                        numOctaves="4" result="noise" />
+
+          <feColorMatrix in="noise" type="matrix"
+                         values="0 0 0 0 0
+                                 0 0 0 0 0
+                                 0 0 0 0 0
+                                 0 0 0 -1.5 1.5" result="monoNoise" />
+
+          <feBlend id="grainBlend" in="chromatic" in2="monoNoise"
+                   mode="multiply" result="grainy" />
+
+          <!-- Final output -->
+          <feComposite in="grainy" in2="SourceAlpha" operator="in" />
+        </filter>
+      </defs>
+
+      <text id="trackText" class="track-text" x="50%" y="50%" filter="url(#textFilter)">
+        NEVER ENOUGH
+      </text>
+    </svg>
+  </div>
+  <div id="info"></div>
+
+  <div id="controls" style="position: fixed; top: 20px; right: 20px; background: rgba(30,30,30,0.9); padding: 20px; border-radius: 8px; color: #fff; font-family: monospace; font-size: 12px; max-width: 300px; max-height: 90vh; overflow-y: auto;">
+    <h3 style="margin: 0 0 15px 0; font-size: 14px; color: #ff64c8;">CONTROLS</h3>
+
+    <div style="margin-bottom: 15px;">
+      <label style="display: block; margin-bottom: 5px;">Turbulence Frequency</label>
+      <input type="range" id="turbFreqMin" min="0" max="0.02" value="0.005" step="0.001" style="width: 100%;">
+      <input type="range" id="turbFreqMax" min="0" max="0.05" value="0.015" step="0.001" style="width: 100%;">
+      <span id="turbFreqValue" style="opacity: 0.6; font-size: 10px;">0.005 → 0.015</span>
+    </div>
+
+    <div style="margin-bottom: 15px;">
+      <label style="display: block; margin-bottom: 5px;">Displacement Scale</label>
+      <input type="range" id="dispMin" min="0" max="20" value="5" step="1" style="width: 100%;">
+      <input type="range" id="dispMax" min="0" max="100" value="50" step="1" style="width: 100%;">
+      <span id="dispValue" style="opacity: 0.6; font-size: 10px;">5 → 50</span>
+    </div>
+
+    <div style="margin-bottom: 15px;">
+      <label style="display: block; margin-bottom: 5px;">Blur Amount</label>
+      <input type="range" id="blurMin" min="0" max="5" value="0.5" step="0.1" style="width: 100%;">
+      <input type="range" id="blurMax" min="0" max="10" value="2" step="0.1" style="width: 100%;">
+      <span id="blurValue" style="opacity: 0.6; font-size: 10px;">0.5 → 2.0</span>
+    </div>
+
+    <div style="margin-bottom: 15px;">
+      <label style="display: block; margin-bottom: 5px;">Chromatic Offset</label>
+      <input type="range" id="chromaMin" min="0" max="10" value="2" step="0.5" style="width: 100%;">
+      <input type="range" id="chromaMax" min="0" max="40" value="20" step="1" style="width: 100%;">
+      <span id="chromaValue" style="opacity: 0.6; font-size: 10px;">2.0 → 20.0</span>
+    </div>
+
+    <div style="margin-bottom: 15px;">
+      <label style="display: block; margin-bottom: 5px;">Grain Frequency</label>
+      <input type="range" id="grainMin" min="0.5" max="1.5" value="0.8" step="0.05" style="width: 100%;">
+      <input type="range" id="grainMax" min="0.5" max="2" value="1.1" step="0.05" style="width: 100%;">
+      <span id="grainValue" style="opacity: 0.6; font-size: 10px;">0.80 → 1.10</span>
+    </div>
+
+    <div style="margin-bottom: 15px;">
+      <label style="display: flex; align-items: center; cursor: pointer;">
+        <input type="checkbox" id="normalizeAggression" checked style="margin-right: 8px;">
+        Normalize Aggression
+      </label>
+    </div>
+
+    <button id="resetBtn" style="width: 100%; padding: 8px; background: #ff64c8; border: none; border-radius: 4px; color: #000; font-weight: bold; cursor: pointer; font-family: monospace;">RESET</button>
+  </div>
+
+  <script src="text_svg.js"></script>
+</body>
+</html>
